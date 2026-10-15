@@ -1,0 +1,1 @@
+This app is helpful to record movements of of aircrafts day to day basis. Generated data can be used to record, report timings, special notes and track charges receivable.For help contact Ckatkar75@gmail.com.
