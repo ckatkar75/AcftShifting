@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GndOps">
+<meta name="theme-color" content="#0a0d14">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Ground Ops Dashboard v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet">
+<!-- SheetJS for Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- jsPDF for PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+  :root {
+    --bg: #0a0d14;
+    --panel: #111724;
+    --panel2: #161d2e;
+    --border: #1e3a5f;
+    --accent: #00c8ff;
+    --accent2: #ff6b35;
+    --accent3: #00ff88;
+    --text: #cde4ff;
+    --muted: #4a6a8a;
+    --input-bg: #0d1520;
+    --glow: 0 0 12px rgba(0,200,255,0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,200,255,0.015) 2px, rgba(0,200,255,0.015) 4px);
+    pointer-events: none; z-index: 0;
+  }
+
+  .app-wrapper {
+    position: relative; z-index: 1;
+    max-width: 480px; margin: 0 auto;
+    padding: 0 0 110px;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: linear-gradient(180deg, #0d1825 0%, var(--panel) 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 14px 16px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 4px 20px rgba(0,200,255,0.15);
+  }
+
+  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .logo-area { display: flex; align-items: center; gap: 10px; }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), #0066ff);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 18px; box-shadow: var(--glow);
+  }
+
+  .logo-text { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 2px; color: var(--accent); }
+  .logo-sub { font-family: 'Share Tech Mono', monospace; font-size: 8px; color: var(--muted); letter-spacing: 1px; }
+
+  .live-badge {
+    display: flex; align-items: center; gap: 5px;
+    background: rgba(0,255,136,0.08); border: 1px solid var(--accent3);
+    border-radius: 20px; padding: 4px 9px;
+    font-family: 'Share Tech Mono', monospace; font-size: 9px; color: var(--accent3);
+  }
+
+  .live-dot { width: 6px; height: 6px; background: var(--accent3); border-radius: 50%; animation: pulse 1.5s infinite; }
+
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(0.8); } }
+
+  .clock-strip {
+    margin-top: 10px; background: var(--input-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  .clock-main { font-family: 'Share Tech Mono', monospace; font-size: 17px; color: var(--accent); letter-spacing: 2px; }
+  .clock-date { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+  .utc-label { font-size: 8px; color: var(--accent2); font-family: 'Share Tech Mono', monospace; border: 1px solid var(--accent2); padding: 2px 5px; border-radius: 3px; }
+
+  /* ── SECTION ── */
+  .section-header { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
+  .section-label { font-family: 'Rajdhani', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; white-space: nowrap; }
+  .section-line { flex: 1; height: 1px; background: linear-gradient(90deg, var(--border), transparent); }
+
+  /* ── FORM ── */
+  .form-grid { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field-label { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 1.2px; color: #8fb8de; text-transform: uppercase; padding-left: 2px; }
+
+  .field-input {
+    background: var(--input-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px; color: var(--text);
+    font-family: 'Exo 2', sans-serif; font-size: 14px; font-weight: 500; width: 100%;
+    transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+  }
+  .field-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,200,255,0.1); }
+  .field-input::placeholder { color: #2a4a6a; }
+
+  /* ── NAME BADGE ── */
+  .remember-badge {
+    display: none; align-items: center; gap: 6px;
+    background: rgba(0,200,255,0.06); border: 1px solid rgba(0,200,255,0.25);
+    border-radius: 6px; padding: 7px 10px; margin-top: 2px; cursor: pointer;
+    transition: background 0.2s; animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+  .remember-badge.show { display: flex; }
+  .remember-badge:active { background: rgba(0,200,255,0.15); }
+  .badge-name { font-family: 'Exo 2', sans-serif; font-weight: 600; font-size: 13px; color: var(--accent); flex: 1; }
+  .badge-hint { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: var(--muted); background: rgba(0,200,255,0.1); border-radius: 3px; padding: 2px 5px; }
+
+  /* ── AIRCRAFT ── */
+  .aircraft-grid { display: grid; grid-template-columns: 72px 14px 1fr; gap: 4px; align-items: center; }
+  .aircraft-sep { text-align: center; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 22px; color: var(--accent2); }
+
+  /* ── ROUTE ── */
+  .route-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; }
+  .route-arrow { color: var(--accent2); font-size: 20px; text-align: center; font-weight: 700; }
+
+  /* ── TIME ── */
+  .time-field { display: flex; gap: 6px; align-items: center; }
+  .time-field .field-input { flex: 1; font-family: 'Share Tech Mono', monospace; font-size: 14px; letter-spacing: 1px; }
+
+  .time-btn {
+    background: linear-gradient(135deg, #003a5c, #005080);
+    border: 1px solid var(--accent); border-radius: 6px;
+    font-size: 14px; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+  }
+  .time-btn:active { transform: scale(0.9); box-shadow: 0 0 10px rgba(0,200,255,0.5); }
+  .time-btn::after { content: '⏱'; font-size: 17px; }
+
+  /* ── FUEL ── */
+  .fuel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fuel-card { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; position: relative; overflow: hidden; }
+  .fuel-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent2), transparent); }
+  .fuel-label { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 1px; color: var(--accent2); text-transform: uppercase; margin-bottom: 6px; }
+  .fuel-input { background: var(--input-bg); border: 1px solid #2a1a00; border-radius: 5px; padding: 8px 10px; color: var(--accent2); font-family: 'Share Tech Mono', monospace; font-size: 14px; width: 100%; outline: none; transition: border-color 0.2s; }
+  .fuel-input:focus { border-color: var(--accent2); }
+  .fuel-input::placeholder { color: #3a2a1a; }
+  .fuel-unit { font-family: 'Share Tech Mono', monospace; font-size: 8px; color: var(--muted); margin-top: 4px; text-align: right; }
+
+  /* ── AMOUNT FIELD ── */
+  .amount-card { background: var(--panel2); border: 1px solid #1a3a1a; border-radius: 8px; padding: 10px 12px; position: relative; overflow: hidden; }
+  .amount-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #00ff88, transparent); }
+  .amount-label { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 1px; color: var(--accent3); text-transform: uppercase; margin-bottom: 6px; }
+  .amount-input { background: var(--input-bg); border: 1px solid #0a2a0a; border-radius: 5px; padding: 8px 10px; color: var(--accent3); font-family: 'Share Tech Mono', monospace; font-size: 14px; width: 100%; outline: none; transition: border-color 0.2s; }
+  .amount-input:focus { border-color: var(--accent3); }
+  .amount-input::placeholder { color: #1a3a1a; }
+
+  /* ── BUTTONS ── */
+  .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 0; }
+
+  .btn-save {
+    background: linear-gradient(135deg, #003a20, #005030); border: 2px solid var(--accent3);
+    border-radius: 10px; color: var(--accent3);
+    font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
+    padding: 13px 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;
+  }
+
+  .btn-copy {
+    background: linear-gradient(135deg, #1a1500, #2a2200); border: 2px solid #ffe033;
+    border-radius: 10px; color: #ffe033;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
+    padding: 13px 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;
+  }
+
+  .btn-save:active, .btn-copy:active { transform: scale(0.96); }
+
+  .btn-whatsapp {
+    width: calc(100% - 32px); margin: 10px 16px 0;
+    background: linear-gradient(135deg, #002a0c, #004a18); border: 2px solid #25d366;
+    border-radius: 10px; color: #25d366;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 15px; letter-spacing: 3px; text-transform: uppercase;
+    padding: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: all 0.2s; box-shadow: 0 0 14px rgba(37,211,102,0.1);
+  }
+
+  .btn-whatsapp:active { transform: scale(0.97); }
+
+  /* ── RECORDS ── */
+  .records-section { padding: 0 16px; }
+
+  .record-card {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer; transition: border-color 0.2s;
+    margin-bottom: 8px; animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:translateX(0); } }
+  .record-card:active { border-color: var(--accent); }
+  .record-name { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 15px; color: var(--text); }
+  .record-meta { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .record-del { background: rgba(255,50,50,0.1); border: 1px solid rgba(255,50,50,0.3); border-radius: 5px; color: #ff5555; padding: 6px 10px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .record-del:active { background: rgba(255,50,50,0.3); }
+
+  .empty-records { text-align: center; padding: 50px 30px; color: var(--muted); font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 1px; line-height: 2; }
+
+  /* ── REPORT PANEL ── */
+  .report-panel {
+    margin: 10px 16px 0;
+    background: var(--panel2);
+    border: 1px solid #1a3060;
+    border-radius: 12px; overflow: hidden;
+  }
+
+  .report-header {
+    background: linear-gradient(135deg, #0d1f3a, #0a1628);
+    padding: 12px 14px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .report-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; flex: 1; }
+  .report-toggle { color: var(--accent); font-size: 12px; transition: transform 0.3s; }
+  .report-toggle.open { transform: rotate(180deg); }
+
+  .report-body { padding: 12px 14px; display: none; }
+  .report-body.open { display: block; }
+
+  .report-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+
+  .report-select {
+    background: var(--input-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 9px 10px; color: var(--text);
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    outline: none; width: 100%; cursor: pointer;
+  }
+  .report-select:focus { border-color: var(--accent); }
+
+  .report-btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .btn-excel {
+    background: linear-gradient(135deg, #0a2a0a, #154515); border: 2px solid #1d7a1d;
+    border-radius: 8px; color: #4dbb4d;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 11px 6px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;
+  }
+
+  .btn-pdf {
+    background: linear-gradient(135deg, #2a0a0a, #450f0f); border: 2px solid #8b1a1a;
+    border-radius: 8px; color: #e05555;
+    font-family: 'Rajdhani', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 11px 6px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;
+  }
+
+  .btn-excel:active, .btn-pdf:active { transform: scale(0.96); }
+
+  .report-info { font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--muted); text-align: center; margin-top: 8px; letter-spacing: 1px; }
+
+  /* ── DETAIL ── */
+  .detail-grid { display: flex; flex-direction: column; gap: 7px; padding: 0 16px; }
+  .detail-row { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+  .detail-key { font-family: 'Share Tech Mono', monospace; font-size: 9px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; flex-shrink: 0; margin-right: 10px; }
+  .detail-val { font-family: 'Exo 2', sans-serif; font-weight: 600; font-size: 13px; color: var(--text); text-align: right; }
+
+  .back-btn { display: flex; align-items: center; gap: 6px; padding: 14px 16px; font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--accent); cursor: pointer; letter-spacing: 1px; }
+
+  .detail-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 4px; }
+
+  .btn-sm { border-radius: 8px; padding: 11px 8px; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; border: 2px solid; }
+  .btn-sm-copy { background: linear-gradient(135deg,#1a1500,#2a2200); border-color: #ffe033; color: #ffe033; }
+  .btn-sm-wa { background: linear-gradient(135deg,#002a0c,#004a18); border-color: #25d366; color: #25d366; }
+  .btn-sm:active { transform: scale(0.95); }
+
+  /* ── TABS ── */
+  .tab-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px; background: var(--panel);
+    border-top: 2px solid var(--border); display: flex; z-index: 100;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+  }
+
+  .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 5px; cursor: pointer; border: none; background: transparent; color: var(--muted); font-family: 'Share Tech Mono', monospace; font-size: 8px; letter-spacing: 1px; gap: 4px; transition: color 0.2s; }
+  .tab-btn.active { color: var(--accent); }
+  .tab-btn .tab-icon { font-size: 18px; }
+
+  /* ── TOAST ── */
+  .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-10px); background: var(--panel); border: 1px solid var(--accent3); border-radius: 8px; padding: 10px 18px; font-family: 'Share Tech Mono', monospace; font-size: 12px; color: var(--accent3); z-index: 999; opacity: 0; transition: all 0.3s; white-space: nowrap; box-shadow: 0 4px 20px rgba(0,0,0,0.5); pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .page { display: none; }
+  .page.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div class="app-wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-top">
+      <div class="logo-area">
+        <div class="logo-icon">✈</div>
+        <div>
+          <div class="logo-text">GndOps</div>
+          <div class="logo-sub">GROUND OPERATIONS LOG</div>
+        </div>
+      </div>
+      <div class="live-badge"><div class="live-dot"></div><span>LIVE</span></div>
+    </div>
+    <div class="clock-strip">
+      <div class="clock-main" id="clockTime">--:--:--</div>
+      <div class="clock-date" id="clockDate">--- -- ----</div>
+      <div class="utc-label">UTC+0</div>
+    </div>
+  </div>
+
+  <!-- PAGE: NEW LOG -->
+  <div class="page active" id="pageFill">
+
+    <div class="section-header">
+      <div class="section-label">Flight Identity</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <div class="field-label">Officer / Crew Name</div>
+        <input class="field-input" id="f_name" type="text" placeholder="Enter full name" autocomplete="off" oninput="onNameInput()" onblur="saveName()">
+        <div class="remember-badge" id="nameBadge" onclick="applyRememberedName()">
+          <span style="font-size:15px">👤</span>
+          <span class="badge-name" id="badgeNameText"></span>
+          <span class="badge-hint">USE</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Shift Manager</div>
+        <input class="field-input" id="f_manager" type="text" placeholder="Shift manager name" autocomplete="off">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field">
+          <div class="field-label">POB · Person on Brakes</div>
+          <input class="field-input" id="f_pob" type="text" placeholder="Name" autocomplete="off">
+        </div>
+        <div class="field">
+          <div class="field-label">POG · Person on Ground</div>
+          <input class="field-input" id="f_pog" type="text" placeholder="Name" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Date</div>
+        <input class="field-input" id="f_date" type="date">
+      </div>
+
+      <div class="field">
+        <div class="field-label">Aircraft · Country Code — Registration</div>
+        <div class="aircraft-grid">
+          <input class="field-input" id="f_ac_cc" type="text" placeholder="A6" maxlength="3" autocomplete="off"
+            style="text-align:center;text-transform:uppercase;letter-spacing:3px;font-family:'Share Tech Mono',monospace;font-size:15px;padding:10px 6px"
+            oninput="this.value=this.value.replace(/[^A-Za-z]/g,'').toUpperCase();if(this.value.length>=2)document.getElementById('f_ac_reg').focus()">
+          <div class="aircraft-sep">-</div>
+          <input class="field-input" id="f_ac_reg" type="text" placeholder="EEV" maxlength="4" autocomplete="off"
+            style="text-align:center;text-transform:uppercase;letter-spacing:4px;font-family:'Share Tech Mono',monospace;font-size:17px;font-weight:700;padding:10px 6px"
+            oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Route</div>
+        <div class="route-grid">
+          <input class="field-input" id="f_from" type="text" placeholder="FROM" autocomplete="off"
+            style="text-align:center;text-transform:uppercase;letter-spacing:2px;font-family:'Share Tech Mono',monospace"
+            oninput="this.value=this.value.toUpperCase()">
+          <div class="route-arrow">→</div>
+          <input class="field-input" id="f_to" type="text" placeholder="TO" autocomplete="off"
+            style="text-align:center;text-transform:uppercase;letter-spacing:2px;font-family:'Share Tech Mono',monospace"
+            oninput="this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-label">Operations Timeline</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <div class="field-label">Engineering Reported Time</div>
+        <div class="time-field">
+          <input class="field-input" id="f_eng" type="time">
+          <button class="time-btn" onclick="stampTime('f_eng')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">GSD Reported Time</div>
+        <div class="time-field">
+          <input class="field-input" id="f_gsd" type="time">
+          <button class="time-btn" onclick="stampTime('f_gsd')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">ATC Permission Requested Time</div>
+        <div class="time-field">
+          <input class="field-input" id="f_atcReq" type="time">
+          <button class="time-btn" onclick="stampTime('f_atcReq')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">ATC Permission Granted Time</div>
+        <div class="time-field">
+          <input class="field-input" id="f_atcGrant" type="time">
+          <button class="time-btn" onclick="stampTime('f_atcGrant')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Towing Completed Time</div>
+        <div class="time-field">
+          <input class="field-input" id="f_tow" type="time">
+          <button class="time-btn" onclick="stampTime('f_tow')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Note</div>
+        <textarea class="field-input" id="f_note" rows="3" placeholder="Any remarks or observations..." style="resize:none;line-height:1.5;font-size:13px;"></textarea>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-label">Fuel &amp; Financials</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="form-grid">
+      <div class="fuel-grid">
+        <div class="fuel-card">
+          <div class="fuel-label">⛽ Fuel On Board</div>
+          <input class="fuel-input" id="f_fob" type="number" placeholder="0.00" inputmode="decimal" step="0.01">
+          <div class="fuel-unit">TONS</div>
+        </div>
+        <div class="fuel-card">
+          <div class="fuel-label">🛢 Center Tank</div>
+          <input class="fuel-input" id="f_ctr" type="number" placeholder="0.00" inputmode="decimal" step="0.01">
+          <div class="fuel-unit">TONS</div>
+        </div>
+      </div>
+      <div class="amount-card">
+        <div class="amount-label">💰 Amount</div>
+        <input class="amount-input" id="f_amount" type="number" placeholder="0.00" inputmode="decimal" step="0.01">
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-save" onclick="saveRecord()">💾 SAVE</button>
+      <button class="btn-copy" onclick="copyMessage()">📋 COPY MSG</button>
+    </div>
+
+    <button class="btn-whatsapp" onclick="shareWhatsApp()">
+      <svg width="18" height="18" viewBox="0 0 32 32" fill="#25d366"><path d="M16 0C7.163 0 0 7.163 0 16c0 2.822.736 5.47 2.027 7.773L0 32l8.473-2.018A15.93 15.93 0 0016 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.28 13.28 0 01-6.773-1.853l-.487-.29-5.027 1.197 1.22-4.893-.317-.503A13.253 13.253 0 012.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.273-9.973c-.397-.2-2.35-1.16-2.713-1.293-.363-.133-.627-.2-.89.2-.263.4-1.02 1.293-1.25 1.56-.23.267-.46.3-.857.1-.397-.2-1.677-.617-3.193-1.967-1.18-1.053-1.977-2.353-2.207-2.75-.23-.397-.024-.613.173-.81.177-.177.397-.46.593-.69.197-.23.263-.397.397-.66.133-.263.067-.497-.033-.697-.1-.2-.89-2.15-1.22-2.943-.32-.773-.647-.667-.89-.68-.23-.013-.497-.017-.763-.017s-.697.1-.963.397c-.267.3-1.02 1-1.02 2.44s1.043 2.83 1.187 3.027c.143.197 2.053 3.133 4.973 4.393.693.3 1.234.477 1.656.613.697.22 1.33.19 1.83.117.56-.083 2.35-.963 2.68-1.89.33-.927.33-1.72.23-1.887-.1-.167-.363-.267-.76-.467z"/></svg>
+      SHARE ON WHATSAPP
+    </button>
+
+    <div style="height:8px"></div>
+  </div>
+
+  <!-- PAGE: RECORDS -->
+  <div class="page" id="pageRecords">
+    <div class="section-header">
+      <div class="section-label">Saved Records</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="records-section">
+      <div id="recordsList">
+        <div class="empty-records">NO RECORDS SAVED YET<br>Fill the form and tap Save</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE: REPORTS -->
+  <div class="page" id="pageReports">
+    <div class="section-header">
+      <div class="section-label">Monthly Reports</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div style="padding: 0 16px;">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:12px;line-height:1.7;">
+        Select a month and year, then download a full report with all flights — name, aircraft, route, and amount — sorted by date.
+      </div>
+
+      <div class="report-row">
+        <div class="field">
+          <div class="field-label">Month</div>
+          <select class="report-select" id="rpt_month">
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-label">Year</div>
+          <select class="report-select" id="rpt_year"></select>
+        </div>
+      </div>
+
+      <div id="rpt_preview" style="margin-bottom:12px;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--accent3);text-align:center;padding:8px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:6px;"></div>
+
+      <div class="report-btn-row">
+        <button class="btn-excel" onclick="downloadExcel()">
+          <span style="font-size:16px">📊</span> EXCEL
+        </button>
+        <button class="btn-pdf" onclick="downloadPDF()">
+          <span style="font-size:16px">📄</span> PDF
+        </button>
+      </div>
+
+      <div class="report-info" style="margin-top:10px;">Columns: Date · Name · Aircraft · From · To · Amount</div>
+
+      <div style="margin-top:20px">
+        <div class="section-header" style="padding:0 0 8px 0">
+          <div class="section-label" style="font-size:9px">Quick Stats</div>
+          <div class="section-line"></div>
+        </div>
+        <div id="rpt_stats" style="display:flex;flex-direction:column;gap:7px;"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app-wrapper -->
+
+<!-- TABS -->
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab0" onclick="switchTab(0)">
+    <span class="tab-icon">📋</span><span>NEW LOG</span>
+  </button>
+  <button class="tab-btn" id="tab1" onclick="switchTab(1)">
+    <span class="tab-icon">🗂</span><span>RECORDS</span>
+  </button>
+  <button class="tab-btn" id="tab2" onclick="switchTab(2)">
+    <span class="tab-icon">📈</span><span>REPORTS</span>
+  </button>
+</div>
+
+<script>
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('clockTime').textContent = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+  const days=['SUN','MON','TUE','WED','THU','FRI','SAT'];
+  const months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('clockDate').textContent = `${days[now.getUTCDay()]} ${pad(now.getUTCDate())} ${months[now.getUTCMonth()]} ${now.getUTCFullYear()}`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+document.getElementById('f_date').value = new Date().toISOString().split('T')[0];
+
+// populate year selector
+(function() {
+  const y = document.getElementById('rpt_year');
+  const cur = new Date().getFullYear();
+  for (let i = cur; i >= cur - 5; i--) {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = i;
+    y.appendChild(o);
+  }
+  document.getElementById('rpt_month').value = new Date().getMonth() + 1;
+  y.value = cur;
+})();
+
+// ── NAME MEMORY ──
+const NAME_KEY = 'gndops_name';
+
+function onNameInput() {
+  const remembered = localStorage.getItem(NAME_KEY);
+  const val = document.getElementById('f_name').value;
+  const badge = document.getElementById('nameBadge');
+  if (remembered && val.length === 0) {
+    document.getElementById('badgeNameText').textContent = remembered;
+    badge.classList.add('show');
+  } else { badge.classList.remove('show'); }
+}
+
+function saveName() {
+  const val = document.getElementById('f_name').value.trim();
+  if (val.length > 1) { try { localStorage.setItem(NAME_KEY, val); } catch {} }
+}
+
+function applyRememberedName() {
+  const r = localStorage.getItem(NAME_KEY);
+  if (r) { document.getElementById('f_name').value = r; document.getElementById('nameBadge').classList.remove('show'); showToast('👤 Name applied!'); }
+}
+
+window.addEventListener('load', () => {
+  const r = localStorage.getItem(NAME_KEY);
+  if (r && document.getElementById('f_name').value.trim() === '') {
+    document.getElementById('badgeNameText').textContent = r;
+    document.getElementById('nameBadge').classList.add('show');
+  }
+});
+
+// ── STAMP TIME ──
+function stampTime(id) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById(id).value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const el = document.getElementById(id);
+  el.style.borderColor = 'var(--accent3)';
+  setTimeout(() => el.style.borderColor = '', 900);
+  showToast('⏱ Time stamped!');
+}
+
+// ── TOAST ──
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.borderColor = color||'var(--accent3)'; t.style.color = color||'var(--accent3)';
+  t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── TABS ──
+function switchTab(idx) {
+  ['pageFill','pageRecords','pageReports'].forEach((p,i) => {
+    document.getElementById(p).classList.toggle('active', i===idx);
+    document.getElementById(`tab${i}`).classList.toggle('active', i===idx);
+  });
+  if (idx===1) renderRecords();
+  if (idx===2) updateReportPreview();
+}
+
+// ── STORAGE ──
+function getRecords() { try { return JSON.parse(localStorage.getItem('gndops_records')||'[]'); } catch { return []; } }
+function saveRecords(d) {
+  try {
+    localStorage.setItem('gndops_records', JSON.stringify(d));
+  } catch (e) {
+    showToast('⚠ Storage blocked — exit Private Browsing', '#ff6b35');
+  }
+}
+
+function getAircraft() {
+  const cc = (document.getElementById('f_ac_cc').value||'').trim().toUpperCase();
+  const reg = (document.getElementById('f_ac_reg').value||'').trim().toUpperCase();
+  if (!cc && !reg) return '';
+  if (!reg) return cc; if (!cc) return reg;
+  return `${cc}-${reg}`;
+}
+
+function collectForm() {
+  return {
+    id: Date.now(), savedAt: new Date().toISOString(),
+    name: document.getElementById('f_name').value.trim(),
+    manager: document.getElementById('f_manager').value.trim(),
+    pob: document.getElementById('f_pob').value.trim(),
+    pog: document.getElementById('f_pog').value.trim(),
+    date: document.getElementById('f_date').value,
+    aircraft: getAircraft(),
+    from: document.getElementById('f_from').value.trim().toUpperCase(),
+    to: document.getElementById('f_to').value.trim().toUpperCase(),
+    engTime: document.getElementById('f_eng').value,
+    gsdTime: document.getElementById('f_gsd').value,
+    atcReqTime: document.getElementById('f_atcReq').value,
+    atcGrantTime: document.getElementById('f_atcGrant').value,
+    towTime: document.getElementById('f_tow').value,
+    note: document.getElementById('f_note').value.trim(),
+    fob: document.getElementById('f_fob').value,
+    centerTank: document.getElementById('f_ctr').value,
+    amount: document.getElementById('f_amount').value,
+  };
+}
+
+// ── MESSAGE ──
+function buildMessage(r, full) {
+  const v = x => (x && String(x).trim()) ? x : '—';
+  const route = (r.from && r.to) ? `${r.from} → ${r.to}` : v(r.from || r.to);
+  const lines = [
+    `✈️ *GROUND OPS LOG*`,
+    `━━━━━━━━━━━━`,
+    `👤 *Name:* ${v(r.name)}`,
+  ];
+  if (full) {
+    lines.push(
+      `🧑‍✈️ *Shift Manager:* ${v(r.manager)}`,
+      `🧑 *Person on Brakes (POB):* ${v(r.pob)}`,
+      `🧑 *Person on Ground (POG):* ${v(r.pog)}`
+    );
+  }
+  lines.push(
+    `📅 *Date:* ${v(r.date)}`,
+    `🛩 *Aircraft:* ${v(r.aircraft)}`,
+    `🗺 *Route:* ${route}`,
+    `━━━━━━━━━━━━`,
+    `🔧 *Engineering Reported:* ${v(r.engTime)}`,
+    `🛂 *GSD Reported:* ${v(r.gsdTime)}`,
+    `📡 *ATC Permission Requested:* ${v(r.atcReqTime)}`,
+    `✅ *ATC Permission Granted:* ${v(r.atcGrantTime)}`,
+    `🚜 *Towing Completed:* ${v(r.towTime)}`,
+    `━━━━━━━━━━━━`,
+    `⛽ *Fuel On Board:* ${r.fob ? r.fob+' T' : '—'}`,
+    `🛢 *Center Tank:* ${r.centerTank ? r.centerTank+' T' : '—'}`,
+  );
+  if (full) lines.push(`💰 *Amount:* ${r.amount ? r.amount : '—'}`);
+  if (r.note && r.note.trim()) lines.push(`📝 *Note:* ${r.note.trim()}`);
+  lines.push(`━━━━━━━━━━━━`, `_Logged via GndOps Dashboard_`);
+  return lines.join('\n');
+}
+
+function copyMessage(record) {
+  const r = record || collectForm();
+  const msg = buildMessage(r, true);  // include amount in copy
+
+  function fallbackCopy() {
+    const ta = document.createElement('textarea');
+    ta.value = msg;
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;opacity:0;';
+    ta.setAttribute('readonly', '');
+    document.body.appendChild(ta);
+    // iOS Safari needs a real range selection, not just .select()
+    const range = document.createRange();
+    range.selectNodeContents(ta);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    ta.setSelectionRange(0, msg.length);
+    try {
+      const ok = document.execCommand('copy');
+      showToast(ok ? '📋 Copied!' : '⚠ Tap and hold to copy manually', ok ? '#00ff88' : '#ff6b35');
+    } catch {
+      showToast('⚠ Tap and hold to copy manually', '#ff6b35');
+    }
+    sel.removeAllRanges();
+    document.body.removeChild(ta);
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(msg)
+      .then(() => showToast('📋 Copied to clipboard!'))
+      .catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
+}
+
+function shareWhatsApp(record) {
+  const r = record || collectForm();
+  const url = `https://wa.me/?text=${encodeURIComponent(buildMessage(r, false))}`;  // no amount
+  // iOS Safari handles direct navigation more reliably than window.open for wa.me links
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    window.location.href = url;
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+// ── SAVE ──
+function saveRecord() {
+  const data = collectForm();
+  if (!data.name && !data.aircraft) { showToast('⚠ Fill at least name & aircraft', '#ff6b35'); return; }
+  const records = getRecords();
+  records.unshift(data);
+  saveRecords(records);
+  if (data.name) { try { localStorage.setItem(NAME_KEY, data.name); } catch {} }
+  showToast('✅ Record saved!');
+  setTimeout(() => switchTab(1), 700);
+}
+
+// ── RECORDS ──
+function renderRecords() {
+  const list = document.getElementById('recordsList');
+  const records = getRecords();
+  if (!records.length) { list.innerHTML = '<div class="empty-records">NO RECORDS SAVED YET<br>Fill the form and tap Save</div>'; return; }
+  list.innerHTML = records.map(r => `
+    <div class="record-card" onclick="showDetail(${r.id})">
+      <div class="record-info">
+        <div class="record-name">${r.aircraft || '—'}&nbsp;&nbsp;${r.from ? r.from+'→'+r.to : ''}</div>
+        <div class="record-meta">${r.name || 'No name'} · ${r.date || 'No date'}${r.amount ? ' · '+r.amount : ''}</div>
+      </div>
+      <button class="record-del" onclick="event.stopPropagation();deleteRecord(${r.id})">✕</button>
+    </div>
+  `).join('');
+}
+
+function deleteRecord(id) { saveRecords(getRecords().filter(r => r.id!==id)); renderRecords(); showToast('🗑 Deleted', '#ff5555'); }
+
+function drow(label, val) {
+  const v = (val && String(val).trim()) ? val : '—';
+  return `<div class="detail-row"><div class="detail-key">${label}</div><div class="detail-val">${v}</div></div>`;
+}
+
+function showDetail(id) {
+  const r = getRecords().find(x => x.id===id);
+  if (!r) return;
+  const route = r.from && r.to ? `${r.from} → ${r.to}` : (r.from||r.to||'—');
+  const rJson = encodeURIComponent(JSON.stringify(r));
+  document.getElementById('pageRecords').innerHTML = `
+    <div class="back-btn" onclick="backToList()">← BACK</div>
+    <div class="section-header">
+      <div class="section-label">${r.aircraft||'Record'} · Detail</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="detail-grid">
+      ${drow('Name', r.name)}
+      ${drow('Shift Manager', r.manager)}
+      ${drow('Person on Brakes (POB)', r.pob)}
+      ${drow('Person on Ground (POG)', r.pog)}
+      ${drow('Date', r.date)}
+      ${drow('Aircraft', r.aircraft)}
+      ${drow('Route', route)}
+      ${drow('Engineering Reported', r.engTime)}
+      ${drow('GSD Reported', r.gsdTime)}
+      ${drow('ATC Requested', r.atcReqTime)}
+      ${drow('ATC Granted', r.atcGrantTime)}
+      ${drow('Towing Completed', r.towTime)}
+      ${drow('Note', r.note)}
+      ${drow('Fuel On Board', r.fob ? r.fob+' T' : '')}
+      ${drow('Center Tank', r.centerTank ? r.centerTank+' T' : '')}
+      ${drow('Amount', r.amount ? r.amount : '')}
+    </div>
+    <div class="detail-btns">
+      <button class="btn-sm btn-sm-copy" onclick="copyFromDetail('${rJson}')">📋 COPY MSG</button>
+      <button class="btn-sm btn-sm-wa" onclick="waFromDetail('${rJson}')">
+        <svg width="14" height="14" viewBox="0 0 32 32" fill="#25d366"><path d="M16 0C7.163 0 0 7.163 0 16c0 2.822.736 5.47 2.027 7.773L0 32l8.473-2.018A15.93 15.93 0 0016 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.28 13.28 0 01-6.773-1.853l-.487-.29-5.027 1.197 1.22-4.893-.317-.503A13.253 13.253 0 012.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.273-9.973c-.397-.2-2.35-1.16-2.713-1.293-.363-.133-.627-.2-.89.2-.263.4-1.02 1.293-1.25 1.56-.23.267-.46.3-.857.1-.397-.2-1.677-.617-3.193-1.967-1.18-1.053-1.977-2.353-2.207-2.75-.23-.397-.024-.613.173-.81.177-.177.397-.46.593-.69.197-.23.263-.397.397-.66.133-.263.067-.497-.033-.697-.1-.2-.89-2.15-1.22-2.943-.32-.773-.647-.667-.89-.68-.23-.013-.497-.017-.763-.017s-.697.1-.963.397c-.267.3-1.02 1-1.02 2.44s1.043 2.83 1.187 3.027c.143.197 2.053 3.133 4.973 4.393.693.3 1.234.477 1.656.613.697.22 1.33.19 1.83.117.56-.083 2.35-.963 2.68-1.89.33-.927.33-1.72.23-1.887-.1-.167-.363-.267-.76-.467z"/></svg>
+        WHATSAPP
+      </button>
+    </div>
+    <button class="btn-sm" style="margin:10px 16px 0;width:calc(100% - 32px);background:linear-gradient(135deg,#1a1000,#2a2000);border:2px solid #ffaa00;color:#ffaa00;border-radius:8px;padding:13px;" onclick="editRecord(${r.id})">
+      ✏️ &nbsp;EDIT THIS RECORD
+    </button>
+    <div style="height:24px"></div>
+  `;
+}
+
+function copyFromDetail(e) { copyMessage(JSON.parse(decodeURIComponent(e))); }
+function waFromDetail(e) { shareWhatsApp(JSON.parse(decodeURIComponent(e))); }
+
+function backToList() {
+  document.getElementById('pageRecords').innerHTML = `
+    <div class="section-header"><div class="section-label">Saved Records</div><div class="section-line"></div></div>
+    <div class="records-section"><div id="recordsList"></div></div>
+  `;
+  renderRecords();
+}
+
+// ── EDIT RECORD ──
+function editRecord(id) {
+  const r = getRecords().find(x => x.id === id);
+  if (!r) return;
+  const acParts = (r.aircraft || '').split('-');
+  const acCC = acParts[0] || '';
+  const acReg = acParts.slice(1).join('-') || '';
+
+  document.getElementById('pageRecords').innerHTML = `
+    <div class="back-btn" onclick="showDetail(${id})">← BACK</div>
+    <div class="section-header">
+      <div class="section-label">✏️ Edit Record</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="form-grid" style="padding:0 16px;">
+
+      <div class="field">
+        <div class="field-label">Officer / Crew Name</div>
+        <input class="field-input" id="e_name" type="text" value="${r.name||''}" autocomplete="off">
+      </div>
+      <div class="field">
+        <div class="field-label">Shift Manager</div>
+        <input class="field-input" id="e_manager" type="text" value="${r.manager||''}" autocomplete="off">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field">
+          <div class="field-label">POB · Person on Brakes</div>
+          <input class="field-input" id="e_pob" type="text" value="${r.pob||''}" autocomplete="off">
+        </div>
+        <div class="field">
+          <div class="field-label">POG · Person on Ground</div>
+          <input class="field-input" id="e_pog" type="text" value="${r.pog||''}" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Date</div>
+        <input class="field-input" id="e_date" type="date" value="${r.date||''}">
+      </div>
+      <div class="field">
+        <div class="field-label">Aircraft · Country Code — Registration</div>
+        <div class="aircraft-grid">
+          <input class="field-input" id="e_ac_cc" type="text" value="${acCC}" maxlength="3"
+            style="text-align:center;text-transform:uppercase;letter-spacing:3px;font-family:'Share Tech Mono',monospace;font-size:15px;padding:10px 6px"
+            oninput="this.value=this.value.replace(/[^A-Za-z]/g,'').toUpperCase()">
+          <div class="aircraft-sep">-</div>
+          <input class="field-input" id="e_ac_reg" type="text" value="${acReg}" maxlength="4"
+            style="text-align:center;text-transform:uppercase;letter-spacing:4px;font-family:'Share Tech Mono',monospace;font-size:17px;font-weight:700;padding:10px 6px"
+            oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()">
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Route</div>
+        <div class="route-grid">
+          <input class="field-input" id="e_from" type="text" value="${r.from||''}"
+            style="text-align:center;text-transform:uppercase;letter-spacing:2px;font-family:'Share Tech Mono',monospace"
+            oninput="this.value=this.value.toUpperCase()">
+          <div class="route-arrow">→</div>
+          <input class="field-input" id="e_to" type="text" value="${r.to||''}"
+            style="text-align:center;text-transform:uppercase;letter-spacing:2px;font-family:'Share Tech Mono',monospace"
+            oninput="this.value=this.value.toUpperCase()">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Engineering Reported Time</div>
+        <div class="time-field">
+          <input class="field-input" id="e_eng" type="time" value="${r.engTime||''}">
+          <button class="time-btn" onclick="stampTimeEdit('e_eng')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">GSD Reported Time</div>
+        <div class="time-field">
+          <input class="field-input" id="e_gsd" type="time" value="${r.gsdTime||''}">
+          <button class="time-btn" onclick="stampTimeEdit('e_gsd')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">ATC Permission Requested Time</div>
+        <div class="time-field">
+          <input class="field-input" id="e_atcReq" type="time" value="${r.atcReqTime||''}">
+          <button class="time-btn" onclick="stampTimeEdit('e_atcReq')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">ATC Permission Granted Time</div>
+        <div class="time-field">
+          <input class="field-input" id="e_atcGrant" type="time" value="${r.atcGrantTime||''}">
+          <button class="time-btn" onclick="stampTimeEdit('e_atcGrant')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Towing Completed Time</div>
+        <div class="time-field">
+          <input class="field-input" id="e_tow" type="time" value="${r.towTime||''}">
+          <button class="time-btn" onclick="stampTimeEdit('e_tow')"></button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">Note</div>
+        <textarea class="field-input" id="e_note" rows="3" style="resize:none;line-height:1.5;font-size:13px;">${r.note||''}</textarea>
+      </div>
+
+      <div class="fuel-grid">
+        <div class="fuel-card">
+          <div class="fuel-label">⛽ Fuel On Board</div>
+          <input class="fuel-input" id="e_fob" type="number" step="0.01" value="${r.fob||''}">
+          <div class="fuel-unit">TONS</div>
+        </div>
+        <div class="fuel-card">
+          <div class="fuel-label">🛢 Center Tank</div>
+          <input class="fuel-input" id="e_ctr" type="number" step="0.01" value="${r.centerTank||''}">
+          <div class="fuel-unit">TONS</div>
+        </div>
+      </div>
+      <div class="amount-card">
+        <div class="amount-label">💰 Amount</div>
+        <input class="amount-input" id="e_amount" type="number" step="0.01" value="${r.amount||''}" placeholder="0.00">
+      </div>
+
+    </div>
+
+    <button onclick="saveEdit(${id})" style="width:calc(100% - 32px);margin:16px;background:linear-gradient(135deg,#1a1000,#2a2000);border:2px solid #ffaa00;border-radius:10px;color:#ffaa00;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:4px;text-transform:uppercase;padding:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+      💾 &nbsp;SAVE CHANGES
+    </button>
+    <div style="height:20px"></div>
+  `;
+}
+
+function stampTimeEdit(id) {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById(id).value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  showToast('⏱ Time stamped!');
+}
+
+function saveEdit(id) {
+  const records = getRecords();
+  const idx = records.findIndex(x => x.id === id);
+  if (idx === -1) return;
+
+  const cc = (document.getElementById('e_ac_cc').value||'').trim().toUpperCase();
+  const reg = (document.getElementById('e_ac_reg').value||'').trim().toUpperCase();
+  const aircraft = cc && reg ? `${cc}-${reg}` : (cc || reg);
+
+  records[idx] = {
+    ...records[idx],
+    name: document.getElementById('e_name').value.trim(),
+    manager: document.getElementById('e_manager').value.trim(),
+    pob: document.getElementById('e_pob').value.trim(),
+    pog: document.getElementById('e_pog').value.trim(),
+    date: document.getElementById('e_date').value,
+    aircraft,
+    from: document.getElementById('e_from').value.trim().toUpperCase(),
+    to: document.getElementById('e_to').value.trim().toUpperCase(),
+    engTime: document.getElementById('e_eng').value,
+    gsdTime: document.getElementById('e_gsd').value,
+    atcReqTime: document.getElementById('e_atcReq').value,
+    atcGrantTime: document.getElementById('e_atcGrant').value,
+    towTime: document.getElementById('e_tow').value,
+    note: document.getElementById('e_note').value.trim(),
+    fob: document.getElementById('e_fob').value,
+    centerTank: document.getElementById('e_ctr').value,
+    amount: document.getElementById('e_amount').value,
+    editedAt: new Date().toISOString(),
+  };
+
+  saveRecords(records);
+  showToast('✅ Record updated!');
+  setTimeout(() => showDetail(id), 400);
+}
+
+// ── REPORTS ──
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function getMonthRecords() {
+  const m = parseInt(document.getElementById('rpt_month').value);
+  const y = parseInt(document.getElementById('rpt_year').value);
+  return getRecords()
+    .filter(r => {
+      if (!r.date) return false;
+      const d = new Date(r.date);
+      return d.getFullYear() === y && (d.getMonth()+1) === m;
+    })
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+}
+
+function updateReportPreview() {
+  const recs = getMonthRecords();
+  const m = parseInt(document.getElementById('rpt_month').value);
+  const y = parseInt(document.getElementById('rpt_year').value);
+  const preview = document.getElementById('rpt_preview');
+  const totalAmt = recs.reduce((s,r) => s + (parseFloat(r.amount)||0), 0);
+
+  preview.textContent = recs.length
+    ? `${recs.length} flight${recs.length>1?'s':''} found for ${MONTH_NAMES[m-1]} ${y} · Total: ${totalAmt.toFixed(2)}`
+    : `No records for ${MONTH_NAMES[m-1]} ${y}`;
+
+  // Stats
+  const statsEl = document.getElementById('rpt_stats');
+  if (!recs.length) { statsEl.innerHTML = '<div style="font-family:\'Share Tech Mono\',monospace;font-size:10px;color:var(--muted);text-align:center;padding:10px;">No data for this period</div>'; return; }
+
+  const routes = {};
+  recs.forEach(r => { const k=`${r.from||'?'}→${r.to||'?'}`; routes[k]=(routes[k]||0)+1; });
+  const topRoute = Object.entries(routes).sort((a,b)=>b[1]-a[1])[0];
+
+  statsEl.innerHTML = [
+    statCard('📋 Total Flights', recs.length),
+    statCard('💰 Total Amount', totalAmt.toFixed(2)),
+    statCard('🗺 Top Route', topRoute ? topRoute[0]+' ('+topRoute[1]+'x)' : '—'),
+    statCard('🛩 Aircraft Used', [...new Set(recs.map(r=>r.aircraft).filter(Boolean))].join(', ')||'—'),
+  ].join('');
+}
+
+function statCard(label, value) {
+  return `<div style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;">${label}</span>
+    <span style="font-family:'Exo 2',sans-serif;font-weight:700;font-size:14px;color:var(--text);">${value}</span>
+  </div>`;
+}
+
+// Attach listeners to selects
+document.getElementById('rpt_month').addEventListener('change', updateReportPreview);
+document.getElementById('rpt_year').addEventListener('change', updateReportPreview);
+
+// ── EXCEL DOWNLOAD ──
+function downloadExcel() {
+  const recs = getMonthRecords();
+  const m = parseInt(document.getElementById('rpt_month').value);
+  const y = parseInt(document.getElementById('rpt_year').value);
+  const mName = MONTH_NAMES[m-1];
+
+  if (!recs.length) { showToast(`⚠ No records for ${mName} ${y}`, '#ff6b35'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // === Summary sheet ===
+  const totalAmt = recs.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  const summaryData = [
+    ['GROUND OPS MONTHLY REPORT', '', '', '', '', ''],
+    [`${mName.toUpperCase()} ${y}`, '', '', '', '', ''],
+    ['Generated:', new Date().toLocaleString(), '', '', '', ''],
+    ['', '', '', '', '', ''],
+    ['SUMMARY', '', '', '', '', ''],
+    ['Total Flights', recs.length, '', '', '', ''],
+    ['Total Amount', totalAmt, '', '', '', ''],
+    ['', '', '', '', '', ''],
+  ];
+  const ws_sum = XLSX.utils.aoa_to_sheet(summaryData);
+  ws_sum['!cols'] = [{wch:28},{wch:20},{wch:15},{wch:15},{wch:15},{wch:15}];
+  XLSX.utils.book_append_sheet(wb, ws_sum, 'Summary');
+
+  // === Detail sheet ===
+  const headers = ['Date','Name','Shift Manager','POB (Person on Brakes)','POG (Person on Ground)','Aircraft','From','To','Eng. Reported','GSD Reported','ATC Requested','ATC Granted','Towing Done','FOB (T)','Ctr Tank (T)','Amount'];
+  const rows = recs.map(r => [
+    r.date||'', r.name||'', r.manager||'', r.pob||'', r.pog||'', r.aircraft||'',
+    r.from||'', r.to||'',
+    r.engTime||'', r.gsdTime||'', r.atcReqTime||'', r.atcGrantTime||'', r.towTime||'',
+    r.fob ? parseFloat(r.fob) : '',
+    r.centerTank ? parseFloat(r.centerTank) : '',
+    r.amount ? parseFloat(r.amount) : '',
+  ]);
+
+  // Add total row
+  rows.push(['TOTAL','','','','','','','','','','','','','','', totalAmt]);
+
+  const wsData = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:12},{wch:22},{wch:18},{wch:6},{wch:6},{wch:12},{wch:7},{wch:7},
+    {wch:14},{wch:14},{wch:18},{wch:16},{wch:14},
+    {wch:10},{wch:12},{wch:12}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, `${mName} ${y}`);
+
+  const filename = `GndOps_${mName}_${y}.xlsx`;
+  saveWorkbookCrossPlatform(wb, filename);
+  showToast('📊 Excel ready!');
+}
+
+// iOS Safari can't reliably auto-download files via <a download>.
+// We generate a Blob and open it in a new tab so iOS shows its
+// native "Open in..." / Share sheet, letting the user save it properly.
+function saveWorkbookCrossPlatform(wb, filename) {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS reports as Mac
+  if (isIOS) {
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } else {
+    XLSX.writeFile(wb, filename);
+  }
+}
+
+// ── PDF DOWNLOAD ── clean B&W printable
+function downloadPDF() {
+  const recs = getMonthRecords();
+  const m = parseInt(document.getElementById('rpt_month').value);
+  const y = parseInt(document.getElementById('rpt_year').value);
+  const mName = MONTH_NAMES[m-1];
+
+  if (!recs.length) { showToast(`⚠ No records for ${mName} ${y}`, '#ff6b35'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 15;
+
+  // ── Title ──
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(0, 0, 0);
+  doc.text('GROUND OPERATIONS MONTHLY REPORT', pageW / 2, 18, { align: 'center' });
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${mName} ${y}`, pageW / 2, 26, { align: 'center' });
+
+  // Divider
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 30, pageW - margin, 30);
+
+  doc.setFontSize(8);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})}`, margin, 36);
+  doc.text(`Total Flights: ${recs.length}`, pageW - margin, 36, { align: 'right' });
+
+  // ── Table ──
+  const totalAmt = recs.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+
+  const head = [['#', 'Date', 'Name', 'Aircraft', 'From', 'To', 'Amount']];
+  const body = recs.map((r, i) => [
+    i + 1,
+    r.date || '—',
+    r.name || '—',
+    r.aircraft || '—',
+    r.from || '—',
+    r.to || '—',
+    r.amount ? parseFloat(r.amount).toFixed(2) : '—',
+  ]);
+
+  // Total row
+  body.push(['', 'TOTAL', '', '', '', '', totalAmt.toFixed(2)]);
+
+  doc.autoTable({
+    head: head,
+    body: body,
+    startY: 42,
+    margin: { left: margin, right: margin },
+    styles: {
+      font: 'helvetica',
+      fontSize: 9,
+      cellPadding: 3,
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+      fillColor: [255, 255, 255],
+    },
+    headStyles: {
+      fillColor: [230, 230, 230],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+      fontSize: 9,
+      halign: 'center',
+      lineWidth: 0.3,
+    },
+    alternateRowStyles: { fillColor: [248, 248, 248] },
+    bodyStyles: { fillColor: [255, 255, 255] },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { halign: 'center', cellWidth: 26 },
+      2: { cellWidth: 50 },
+      3: { halign: 'center', cellWidth: 28 },
+      4: { halign: 'center', cellWidth: 18 },
+      5: { halign: 'center', cellWidth: 18 },
+      6: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
+    },
+    didParseCell: function(data) {
+      // Bold + light grey background for total row
+      if (data.row.index === body.length - 1) {
+        data.cell.styles.fillColor = [220, 220, 220];
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = [0, 0, 0];
+      }
+    },
+    didDrawPage: function() {
+      const pN = doc.internal.getCurrentPageInfo().pageNumber;
+      const total = doc.internal.getNumberOfPages();
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.setFont('helvetica', 'normal');
+      doc.line(margin, pageH - 12, pageW - margin, pageH - 12);
+      doc.text(`GndOps · ${mName} ${y}`, margin, pageH - 7);
+      doc.text(`Page ${pN} of ${total}`, pageW - margin, pageH - 7, { align: 'right' });
+    }
+  });
+
+  savePdfCrossPlatform(doc, `GndOps_Report_${mName}_${y}.pdf`);
+  showToast('📄 PDF ready!');
+}
+
+// Same iOS Safari fix as Excel: open a Blob URL in a new tab instead of
+// relying on the download attribute, which iOS often ignores.
+function savePdfCrossPlatform(doc, filename) {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } else {
+    doc.save(filename);
+  }
+}
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js")
+      .then(r => console.log("SW registered:", r.scope))
+      .catch(e => console.log("SW error:", e));
+  });
+}
+</script>
+</body>
+</html>
