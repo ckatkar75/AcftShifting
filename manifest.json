@@ -1,7 +1,7 @@
 {
   "name": "Ground Ops Dashboard",
   "short_name": "GndOps",
-  "description": "Aviation ground operations logger for flight identity, timeline, fuel and financials.",
+  "description": "Aviation ground operations logger.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
